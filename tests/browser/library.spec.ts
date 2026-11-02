@@ -198,3 +198,149 @@ test("accepts dropped Songsterr links and explains the official download route",
     ),
   ).toBe(true);
 });
+
+test("converts pasted text, plays it and remembers grid and notation preferences", async ({
+  page,
+  context,
+}) => {
+  await page.goto("./");
+  await page
+    .getByRole("button", { name: "Paste tab text", exact: true })
+    .click();
+  await page
+    .getByLabel("Title (optional)", { exact: true })
+    .fill("Evening exercise");
+  await page
+    .getByLabel("Tab text", { exact: true })
+    .fill(
+      "Tempo: 96\n[Intro]\ne|----------------|\nB|----------------|\nG|----------------|\nD|--2---4---5---7--|\nA|----------------|\nE|----------------|",
+    );
+  await page
+    .getByRole("button", { name: "Convert and save tab", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Converted and saved");
+  await page.getByRole("button", { name: "Grid", exact: true }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Grid", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", {
+      name: "Evening exercise Unknown artist",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".at-surface")).toBeVisible();
+  await expect(
+    page.getByText(/Timing is estimated from text spacing/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(page.getByLabel("Playback position")).not.toHaveValue("0");
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByLabel("Display", { exact: true }).selectOption("tabs");
+  await page.getByLabel("Layout", { exact: true }).selectOption("horizontal");
+  await page
+    .getByRole("button", { name: "Loop current measure", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Loop", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", { name: "Library", exact: true })
+    .first()
+    .click();
+  await page.reload();
+  await page
+    .getByRole("button", {
+      name: "Evening exercise Unknown artist",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByLabel("Display", { exact: true })).toHaveValue("tabs");
+  await expect(page.getByLabel("Layout", { exact: true })).toHaveValue(
+    "horizontal",
+  );
+  await page.getByLabel("Layout", { exact: true }).selectOption("page");
+  await page
+    .getByRole("button", { name: "Practice mode", exact: true })
+    .click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `test-results/text-tab-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const rs = await navigator.serviceWorker.getRegistrations();
+        return rs.some((r) => r.active?.state === "activated");
+      }),
+    )
+    .toBe(true);
+  await context.setOffline(true);
+  await page.reload();
+  await page
+    .getByRole("button", {
+      name: "Evening exercise Unknown artist",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true }),
+  ).toBeEnabled();
+});
+test("settings persist and readable HTML pages become playable text tabs", async ({
+  page,
+}) => {
+  await page.route("https://example.com/text-tab", (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: "text/html",
+      headers: { "access-control-allow-origin": "*" },
+      body: "<title>Public exercise</title><pre>e|--0---2---3--|\nB|------------|\nG|------------|\nD|------------|\nA|------------|\nE|------------|</pre>",
+    }),
+  );
+  await page.goto("./");
+  await page
+    .getByRole("button", { name: "Settings", exact: true })
+    .first()
+    .click();
+  await page
+    .getByLabel("Notation display", { exact: true })
+    .selectOption("notation");
+  await page.getByLabel("Reduce motion", { exact: true }).check();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Settings", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByLabel("Notation display", { exact: true }),
+  ).toHaveValue("notation");
+  await expect(page.getByLabel("Reduce motion", { exact: true })).toBeChecked();
+  await page
+    .getByRole("button", { name: "Back to library", exact: false })
+    .click();
+  await page
+    .getByRole("button", { name: "Import from URL", exact: true })
+    .click();
+  await page
+    .getByLabel("Paste a tab link")
+    .fill("https://example.com/text-tab");
+  await page.getByRole("button", { name: "Import URL", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Public exercise");
+  await page
+    .getByRole("button", {
+      name: "Public exercise Unknown artist",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".at-surface")).toBeVisible();
+});

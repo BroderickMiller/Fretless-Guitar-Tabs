@@ -14,9 +14,11 @@ import {
   ShieldCheck,
   WifiOff,
   Link2,
+  Settings2,
+  ClipboardPaste,
 } from "lucide-react";
 import type { TabEntry } from "./types";
-import { listTabs, saveTab, deleteTab } from "./storage/library";
+import { listTabs, saveTab, deleteTab, clearTabs } from "./storage/library";
 import { importTab, extensions } from "./services/import";
 import { searchTabs } from "./providers/local";
 import {
@@ -25,10 +27,23 @@ import {
   sourceWebsite,
   droppedUrl,
 } from "./services/url-import";
+import { PreferencesProvider, usePreferences } from "./settings/preferences";
+import Settings from "./components/Settings";
+import TextImport from "./components/TextImport";
 import PlayerBoundary from "./components/PlayerBoundary";
 const Player = lazy(() => import("./components/Player"));
 type View = "all" | "favourites" | "recent";
 export default function App() {
+  return (
+    <PreferencesProvider>
+      <Application />
+    </PreferencesProvider>
+  );
+}
+function Application() {
+  const { preferences, setPreference, light } = usePreferences();
+  const [settingsOpen, setSettingsOpen] = useState(false),
+    [textOpen, setTextOpen] = useState(false);
   const [tabs, setTabs] = useState<TabEntry[]>([]),
     [loaded, setLoaded] = useState(false),
     [view, setView] = useState<View>("all"),
@@ -44,13 +59,6 @@ export default function App() {
     [drag, setDrag] = useState(false),
     [offline, setOffline] = useState(!navigator.onLine),
     [cached, setCached] = useState(false);
-  const [light, setLight] = useState(() => {
-    try {
-      return localStorage.getItem("fretless-theme") === "light";
-    } catch {
-      return false;
-    }
-  });
   const [urlOpen, setUrlOpen] = useState(false),
     [urlValue, setUrlValue] = useState(""),
     [downloading, setDownloading] = useState(false);
@@ -68,6 +76,7 @@ export default function App() {
   }
   async function urlImport(value: string) {
     if (busy) return;
+    setTextOpen(false);
     setUrlOpen(true);
     setUrlValue(value);
     setErrors([]);
@@ -130,14 +139,6 @@ export default function App() {
       )
       .finally(() => setLoaded(true));
   }, []);
-  useEffect(() => {
-    document.documentElement.dataset.theme = light ? "light" : "dark";
-    try {
-      localStorage.setItem("fretless-theme", light ? "light" : "dark");
-    } catch {
-      /* Preferences are optional when storage is blocked. */
-    }
-  }, [light]);
   useEffect(() => {
     const update = () => setOffline(!navigator.onLine);
     const cache = () => setCached(true);
@@ -239,7 +240,9 @@ export default function App() {
         ? a.title.localeCompare(b.title)
         : sort === "artist"
           ? a.artist.localeCompare(b.artist)
-          : b.opened - a.opened || b.added - a.added,
+          : sort === "added"
+            ? b.added - a.added
+            : b.opened - a.opened || b.added - a.added,
     );
   return (
     <div
@@ -288,9 +291,12 @@ export default function App() {
         <p className="sidebar-label">YOUR SPACE</p>
         <nav aria-label="Library">
           <button
-            className={view === "all" && !selected ? "active" : ""}
+            className={
+              view === "all" && !selected && !settingsOpen ? "active" : ""
+            }
             onClick={() => {
               setSelected(null);
+              setSettingsOpen(false);
               setView("all");
             }}
           >
@@ -298,9 +304,14 @@ export default function App() {
             Library<span>{tabs.length}</span>
           </button>
           <button
-            className={view === "favourites" && !selected ? "active" : ""}
+            className={
+              view === "favourites" && !selected && !settingsOpen
+                ? "active"
+                : ""
+            }
             onClick={() => {
               setSelected(null);
+              setSettingsOpen(false);
               setView("favourites");
             }}
           >
@@ -308,9 +319,12 @@ export default function App() {
             Favourites<span>{tabs.filter((t) => t.favourite).length}</span>
           </button>
           <button
-            className={view === "recent" && !selected ? "active" : ""}
+            className={
+              view === "recent" && !selected && !settingsOpen ? "active" : ""
+            }
             onClick={() => {
               setSelected(null);
+              setSettingsOpen(false);
               setView("recent");
             }}
           >
@@ -318,6 +332,16 @@ export default function App() {
             Recently played
           </button>
         </nav>
+        <button
+          className="text-button settings-link"
+          onClick={() => {
+            setSelected(null);
+            setSettingsOpen(true);
+          }}
+        >
+          <Settings2 size={18} />
+          Settings
+        </button>
         <div className="sidebar-bottom">
           <div className="privacy">
             <ShieldCheck size={20} />
@@ -353,7 +377,7 @@ export default function App() {
           <button
             className="icon-button"
             aria-label={light ? "Use dark theme" : "Use light theme"}
-            onClick={() => setLight(!light)}
+            onClick={() => setPreference("theme", light ? "dark" : "light")}
           >
             {light ? <Moon size={18} /> : <Sun size={18} />}
           </button>
@@ -365,12 +389,31 @@ export default function App() {
                 fallback={<p role="status">Loading notation engine…</p>}
               >
                 <Player
+                  onFavourite={() => {
+                    const next = {
+                      ...selected,
+                      favourite: !selected.favourite,
+                    };
+                    void update(next).then((ok) => {
+                      if (ok) setSelected(next);
+                    });
+                  }}
                   key={selected.id}
                   tab={selected}
                   onClose={() => setSelected(null)}
                 />
               </Suspense>
             </PlayerBoundary>
+          ) : settingsOpen ? (
+            <Settings
+              count={tabs.length}
+              bytes={tabs.reduce((n, t) => n + t.data.byteLength, 0)}
+              onBack={() => setSettingsOpen(false)}
+              onClear={async () => {
+                await clearTabs();
+                setTabs([]);
+              }}
+            />
           ) : (
             <>
               <section className="intro">
@@ -397,8 +440,20 @@ export default function App() {
               <div className="url-toggle">
                 <button
                   className="text-button"
+                  aria-expanded={textOpen}
+                  onClick={() => {
+                    setUrlOpen(false);
+                    setTextOpen(!textOpen);
+                  }}
+                >
+                  <ClipboardPaste size={17} />
+                  Paste tab text
+                </button>
+                <button
+                  className="text-button"
                   aria-expanded={urlOpen}
                   onClick={() => {
+                    setTextOpen(false);
                     setUrlOpen(!urlOpen);
                     if (!urlOpen)
                       requestAnimationFrame(() => urlInput.current?.focus());
@@ -408,6 +463,23 @@ export default function App() {
                   Import from URL
                 </button>
               </div>
+              {textOpen && (
+                <TextImport
+                  onBusy={setBusy}
+                  onClose={() => setTextOpen(false)}
+                  onSave={async (tab) => {
+                    const current = await listTabs();
+                    if (current.some((t) => t.id === tab.id)) {
+                      setMessage("This text tab is already in your library.");
+                      return;
+                    }
+                    await saveTab(tab);
+                    setTabs([...current, tab]);
+                    setMessage(`Converted and saved “${tab.title}”.`);
+                    setErrors([]);
+                  }}
+                />
+              )}
               {urlOpen && (
                 <section className="url-import" aria-label="Import from URL">
                   <form
@@ -445,8 +517,8 @@ export default function App() {
                       )}
                     </div>
                     <p>
-                      Direct Guitar Pro file links only. Or drop a link anywhere
-                      in your library.
+                      Direct Guitar Pro files and readable text-tab pages. You
+                      can also drop a link into your library.
                     </p>
                   </form>
                   {website && (
@@ -501,6 +573,52 @@ export default function App() {
                 </div>
               )}
               <section className="library-section" aria-label="Music library">
+                <div className="library-view-switch" aria-label="Library view">
+                  <button
+                    aria-pressed={preferences.libraryView === "list"}
+                    onClick={() => setPreference("libraryView", "list")}
+                  >
+                    List
+                  </button>
+                  <button
+                    aria-pressed={preferences.libraryView === "grid"}
+                    onClick={() => setPreference("libraryView", "grid")}
+                  >
+                    Grid
+                  </button>
+                </div>
+                {view === "all" &&
+                  !query &&
+                  !instrument &&
+                  !format &&
+                  !tuning &&
+                  tabs.some((t) => t.opened > 0) && (
+                    <section
+                      className="recent-rail"
+                      aria-label="Continue practising"
+                    >
+                      <h2>Continue practising</h2>
+                      <div>
+                        {tabs
+                          .filter((t) => t.opened > 0)
+                          .sort((a, b) => b.opened - a.opened)
+                          .slice(0, 8)
+                          .map((t) => (
+                            <button
+                              key={t.id}
+                              aria-label={`Resume ${t.title}`}
+                              onClick={() => void handleOpen(t)}
+                            >
+                              <Music2 size={20} />
+                              <span>
+                                {t.title}
+                                <small>{t.artist}</small>
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                    </section>
+                  )}
                 <div className="section-heading">
                   <h2>
                     {view === "all"
@@ -546,7 +664,7 @@ export default function App() {
                     onChange={(e) => setFormat(e.target.value)}
                   >
                     <option value="">All formats</option>
-                    {extensions.map((s) => (
+                    {[...extensions, "text"].map((s) => (
                       <option key={s} value={s}>
                         {s.toUpperCase()}
                       </option>
@@ -574,6 +692,7 @@ export default function App() {
                     onChange={(e) => setSort(e.target.value)}
                   >
                     <option value="recent">Recently opened</option>
+                    <option value="added">Recently added</option>
                     <option value="title">Song A–Z</option>
                     <option value="artist">Artist A–Z</option>
                   </select>
@@ -583,7 +702,9 @@ export default function App() {
                     Opening your library…
                   </div>
                 ) : visible.length ? (
-                  <div className="song-list">
+                  <div
+                    className={`song-list ${preferences.libraryView === "grid" ? "grid-view" : ""}`}
+                  >
                     <div className="list-heading">
                       <span>ARRANGEMENT</span>
                       <span>INSTRUMENT / TUNING</span>
@@ -616,6 +737,31 @@ export default function App() {
                         </div>
                         <span className="format">{t.format.toUpperCase()}</span>
                         <div className="song-actions">
+                          {t.originalText && (
+                            <button
+                              aria-label={`Export text ${t.title}`}
+                              onClick={() => {
+                                const url = URL.createObjectURL(
+                                  new Blob([t.originalText!], {
+                                    type: "text/plain",
+                                  }),
+                                );
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = t.filename.replace(
+                                  /\.gp$/,
+                                  ".txt",
+                                );
+                                a.click();
+                                setTimeout(
+                                  () => URL.revokeObjectURL(url),
+                                  1000,
+                                );
+                              }}
+                            >
+                              <ClipboardPaste size={16} />
+                            </button>
+                          )}
                           {t.sourceUrl && (
                             <a
                               className="source-icon"
@@ -673,7 +819,7 @@ export default function App() {
                     <p>
                       {tabs.length
                         ? "Try a different search or filter, or add another arrangement."
-                        : "Bring your Guitar Pro files. We’ll take care of the music stand."}
+                        : "Import a Guitar Pro file, paste tab text, or bring a readable tab link."}
                     </p>
                     <button
                       className="primary"
@@ -710,6 +856,7 @@ export default function App() {
           <button
             onClick={() => {
               setSelected(null);
+              setSettingsOpen(false);
               setView("all");
             }}
             aria-label="Library"
@@ -720,6 +867,7 @@ export default function App() {
           <button
             onClick={() => {
               setSelected(null);
+              setSettingsOpen(false);
               setView("favourites");
             }}
             aria-label="Favourites"
@@ -730,12 +878,23 @@ export default function App() {
           <button
             onClick={() => {
               setSelected(null);
+              setSettingsOpen(false);
               setView("recent");
             }}
             aria-label="Recent"
           >
             <Clock3 size={20} />
             Recent
+          </button>
+          <button
+            onClick={() => {
+              setSelected(null);
+              setSettingsOpen(true);
+            }}
+            aria-label="Settings"
+          >
+            <Settings2 size={20} />
+            Settings
           </button>
         </footer>
       </div>

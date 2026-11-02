@@ -1,4 +1,5 @@
 import { extensions, importTab } from "./import";
+import { importText, extractTextTab } from "./text-import";
 
 const MAX_BYTES = 30 * 1024 * 1024;
 export function parseImportUrl(value: string): URL {
@@ -54,16 +55,8 @@ export async function importFromUrl(value: string, signal: AbortSignal) {
     throw new Error(
       `The download returned HTTP ${response.status}. Use an accessible file link or download the file from its source.`,
     );
-  if (
-    /text\/html|application\/xhtml/i.test(
-      response.headers.get("content-type") || "",
-    )
-  ) {
-    await response.body?.cancel();
-    throw new Error(
-      "That link opens a webpage, not a Guitar Pro file. Copy the direct download link, or download the file and use Import tabs.",
-    );
-  }
+  const contentType = response.headers.get("content-type") || "";
+  const isText = /text\/|application\/xhtml/i.test(contentType);
   const disposition = response.headers.get("content-disposition") || "";
   let filename: string;
   try {
@@ -73,7 +66,10 @@ export async function importFromUrl(value: string, signal: AbortSignal) {
   }
   const attachment = /filename="?([^";]+)"?/i.exec(disposition)?.[1];
   if (attachment) filename = attachment.trim().split(/[\\/]/).pop() || filename;
-  if (!extensions.includes(filename.split(".").pop()?.toLowerCase() || "")) {
+  if (
+    !isText &&
+    !extensions.includes(filename.split(".").pop()?.toLowerCase() || "")
+  ) {
     await response.body?.cancel();
     throw new Error(
       "The link must download a named Guitar Pro file (.gp3, .gp4, .gp5, .gpx or .gp).",
@@ -102,8 +98,30 @@ export async function importFromUrl(value: string, signal: AbortSignal) {
     reader.releaseLock();
   }
   signal.throwIfAborted();
-  const file = new File(chunks, filename, { type: "application/octet-stream" });
-  const tab = await importTab(file);
+  const file = new File(chunks, filename || "download.gp", {
+    type: contentType || "application/octet-stream",
+  });
+  let tab;
+  if (isText) {
+    if (size > 1000000)
+      throw new Error(
+        "This text webpage is too large to convert. Paste a shorter tab instead.",
+      );
+    const text = await file.text();
+    const page = /html|xhtml/i.test(contentType)
+      ? extractTextTab(text)
+      : { text, title: undefined, artist: undefined };
+    try {
+      tab = await importText(page.text, {
+        title: page.title,
+        artist: page.artist,
+      });
+    } catch (e) {
+      throw new Error(
+        `No playable text tab could be converted from this webpage. ${e instanceof Error ? e.message : ""} Try Paste tab text instead.`,
+      );
+    }
+  } else tab = await importTab(file);
   signal.throwIfAborted();
   // Keep attribution, but never persist expiring tokens or URL fragments.
   return { ...tab, sourceUrl: `${url.origin}${url.pathname}` };

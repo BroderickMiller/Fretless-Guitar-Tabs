@@ -59,3 +59,15 @@ See [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), [provider 
 Choose **Import from URL** and paste an HTTPS link to a directly downloadable Guitar Pro file, or drop the link into the library. The file is validated and saved in IndexedDB like a local import; the source link is retained without query tokens or fragments. The host must allow cross-origin browser downloads. There is no proxy, account-cookie forwarding or tab-page scraping. Downloads have a 30 MB limit and a 30-second timeout, with a cancel control.
 
 Songsterr and Ultimate Guitar page links show a source-specific guide instead of fetching or copying their scores. Songsterr currently lists Guitar Pro download as a Plus feature: use its official export/download option when authorised, then import the downloaded file. HTML/login pages, unavailable downloads and invalid files produce inline errors. New URL imports require internet access; saved imports remain usable offline.
+
+## Paste tab text and library/practice preferences
+
+Choose **Paste tab text**, add an optional title/artist, paste ASCII tablature, and select **Convert and save tab**. Include 4–8 string lines with fret numbers. Fretless infers tuning and carries section headings, tempo changes and repeat markers into a locally generated Guitar Pro file. The original text is retained in IndexedDB and can be exported alongside the generated `.gp` file.
+
+Text tabs usually omit precise rhythm. Conversion estimates timing on a 4/4, sixteenth-note grid; bends, slides, hammer-ons and other expressive techniques are simplified. This is shown in the player. Conversion is limited to one million characters, 400 measures per track and 6,000 notes, and rejects oversized music instead of silently truncating it.
+
+URL import also converts plain-text and HTML text-tab pages when the source allows browser reads. HTML is inspected inertly; no page scripts or embedded resources are executed. Existing restrictions on provider pages remain. Only import content you are permitted to use.
+
+The library offers persistent grid/list views, a continue-practising rail, recently-added sorting and a text-format filter. **Settings** controls dark/light/system theme, reduced motion, default notation layout/display, playback speed, metronome, count-in and track-panel visibility. Storage settings show local file usage and browser quota, with an explicit confirmation before clearing the library.
+
+The score player supports page/line layout, notation/tab/both display, multiple visible tracks, mixer reset, source conversion notes, section jumps, previous/next measure and current-measure/whole-song loops. Keyboard shortcuts: Space play/pause; Esc stop; arrows previous/next measure; `[`/`]` speed; L loop; M metronome. Shortcuts do not intercept typing or focused controls.

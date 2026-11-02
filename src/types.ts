@@ -4,6 +4,9 @@ export interface TabEntry {
   artist: string;
   filename: string;
   sourceUrl?: string;
+  sourceKind?: "text";
+  originalText?: string;
+  warnings?: string[];
   format: string;
   tracks: { name: string; instrument: string; tuning: string }[];
   favourite: boolean;

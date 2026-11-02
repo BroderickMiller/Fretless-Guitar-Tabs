@@ -75,7 +75,7 @@ describe("URL imports", () => {
     );
     await expect(
       importFromUrl("https://example.com/song.gp", signal()),
-    ).rejects.toThrow("webpage");
+    ).rejects.toThrow("No playable text tab");
     fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
     await expect(
       importFromUrl("https://example.com/song.gp", signal()),
@@ -102,7 +102,7 @@ describe("URL imports", () => {
     await expect(
       importFromUrl("https://example.com/song.gp", signal()),
     ).rejects.toThrow("does not allow direct browser");
-    fetchMock.mockResolvedValueOnce(new Response("broken"));
+    fetchMock.mockResolvedValueOnce(new Response("broken",{headers:{"content-type":"application/octet-stream"}}));
     await expect(
       importFromUrl("https://example.com/song.gp", signal()),
     ).rejects.toThrow("could not be read");

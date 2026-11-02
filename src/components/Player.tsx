@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { AlphaTabApi, model } from "@coderline/alphatab";
 import {
   ArrowLeft,
@@ -10,16 +10,25 @@ import {
   Repeat2,
   Volume2,
 } from "lucide-react";
+import { usePreferences } from "../settings/preferences";
 import type { TabEntry } from "../types";
 const clock = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 export default function Player({
   tab,
   onClose,
+  onFavourite,
 }: {
   tab: TabEntry;
   onClose: () => void;
+  onFavourite?: () => void;
 }) {
+  const { preferences, setPreference } = usePreferences();
+  const speed = preferences.playbackSpeed,
+    metro = preferences.metronome,
+    count = preferences.countIn;
+  const [visibleTracks, setVisibleTracks] = useState<number[]>([0]);
+  const [tick, setTick] = useState(0);
   const host = useRef<HTMLDivElement>(null),
     api = useRef<AlphaTabApi | null>(null);
   const [score, setScore] = useState<model.Score | null>(null),
@@ -28,16 +37,13 @@ export default function Player({
     [playing, setPlaying] = useState(false),
     [error, setError] = useState("");
   const [position, setPosition] = useState({ currentTime: 0, endTime: 0 }),
-    [speed, setSpeed] = useState(1),
     [track, setTrack] = useState(0),
     [practice, setPractice] = useState(false),
     [loop, setLoop] = useState(false),
     [range, setRange] = useState([1, 1]);
-  const [metro, setMetro] = useState(false),
-    [count, setCount] = useState(false),
-    [mix, setMix] = useState<
-      Record<number, { mute: boolean; solo: boolean; volume: number }>
-    >({});
+  const [mix, setMix] = useState<
+    Record<number, { mute: boolean; solo: boolean; volume: number }>
+  >({});
   useEffect(() => {
     let cancelled = false;
     let instance: AlphaTabApi | undefined;
@@ -64,9 +70,10 @@ export default function Player({
         instance.playerStateChanged.on((e) =>
           setPlaying(e.state === at.synth.PlayerState.Playing),
         );
-        instance.playerPositionChanged.on((e) =>
-          setPosition({ currentTime: e.currentTime, endTime: e.endTime }),
-        );
+        instance.playerPositionChanged.on((e) => {
+          setPosition({ currentTime: e.currentTime, endTime: e.endTime });
+          setTick(e.currentTick);
+        });
         instance.error.on((e) => {
           setError(
             `Unable to load this arrangement or its audio: ${e.message}`,
@@ -85,25 +92,170 @@ export default function Player({
       instance?.destroy();
       api.current = null;
     };
-  }, [tab]);
+  }, [tab.data]);
   useEffect(() => {
     document.body.classList.toggle("practising", practice);
     return () => document.body.classList.remove("practising");
   }, [practice]);
-  function updateLoop(enabled: boolean, start = range[0], end = range[1]) {
-    setLoop(enabled);
+  const updateLoop = useCallback(
+    (enabled: boolean, start = range[0], end = range[1]) => {
+      setLoop(enabled);
+      const a = api.current;
+      if (!a || !score) return;
+      a.playbackRange = enabled
+        ? {
+            startTick: score.masterBars[start - 1].start,
+            endTick:
+              score.masterBars[end - 1].start +
+              score.masterBars[end - 1].calculateDuration(),
+          }
+        : null;
+      a.isLooping = enabled;
+      if (
+        enabled &&
+        a.playbackRange &&
+        (a.tickPosition < a.playbackRange.startTick ||
+          a.tickPosition >= a.playbackRange.endTick)
+      )
+        a.tickPosition = a.playbackRange.startTick;
+    },
+    [range, score],
+  );
+  const skipMeasure = useCallback(
+    (delta: number) => {
+      const a = api.current;
+      if (!a || !score) return;
+      let i = 0;
+      score.masterBars.forEach((b, n) => {
+        if (b.start <= a.tickPosition) i = n;
+      });
+      a.tickPosition =
+        score.masterBars[
+          Math.max(0, Math.min(score.masterBars.length - 1, i + delta))
+        ].start;
+    },
+    [score],
+  );
+  const currentMeasure = score
+    ? Math.max(1, score.masterBars.filter((b) => b.start <= tick).length)
+    : 1;
+  useEffect(() => {
     const a = api.current;
     if (!a || !score) return;
-    a.playbackRange = enabled
-      ? {
-          startTick: score.masterBars[start - 1].start,
-          endTick:
-            score.masterBars[end - 1].start +
-            score.masterBars[end - 1].calculateDuration(),
+    a.playbackSpeed = preferences.playbackSpeed;
+    a.metronomeVolume = preferences.metronome ? 1 : 0;
+    a.countInVolume = preferences.countIn ? 1 : 0;
+  }, [
+    score,
+    ready,
+    preferences.playbackSpeed,
+    preferences.metronome,
+    preferences.countIn,
+  ]);
+  useEffect(() => {
+    const a = api.current;
+    if (!a || !score) return;
+    let cancelled = false;
+    import("@coderline/alphatab").then((at) => {
+      if (cancelled) return;
+      a.settings.display.layoutMode =
+        preferences.notationLayout === "horizontal"
+          ? at.LayoutMode.Horizontal
+          : at.LayoutMode.Page;
+      for (const t of score.tracks)
+        for (const staff of t.staves) {
+          if (staff.isStringed && !staff.isPercussion) {
+            staff.showStandardNotation = preferences.notationDisplay !== "tabs";
+            staff.showTablature = preferences.notationDisplay !== "notation";
+          }
         }
-      : null;
-    a.isLooping = enabled;
+      a.updateSettings();
+      a.render();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [score, preferences.notationLayout, preferences.notationDisplay]);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        (e.target instanceof HTMLElement &&
+          (e.target.isContentEditable ||
+            ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(
+              e.target.tagName,
+            )))
+      )
+        return;
+      const a = api.current;
+      if (!a) return;
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          if (ready) a.playPause();
+          break;
+        case "Escape":
+          a.stop();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          skipMeasure(-1);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          skipMeasure(1);
+          break;
+        case "l":
+        case "L":
+          updateLoop(!loop);
+          break;
+        case "m":
+        case "M":
+          setPreference("metronome", !metro);
+          break;
+        case "[":
+        case "]": {
+          const speeds = [
+              0.25, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5,
+            ],
+            i = speeds.indexOf(speed);
+          setPreference(
+            "playbackSpeed",
+            speeds[
+              Math.max(
+                0,
+                Math.min(speeds.length - 1, i + (e.key === "[" ? -1 : 1)),
+              )
+            ],
+          );
+          break;
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [ready, loop, metro, speed, setPreference, skipMeasure, updateLoop]);
+  function toggleVisible(i: number) {
+    if (!score) return;
+    const next = visibleTracks.includes(i)
+      ? visibleTracks.filter((n) => n !== i)
+      : [...visibleTracks, i];
+    if (!next.length) return;
+    setVisibleTracks(next);
+    api.current?.renderTracks(score.tracks.filter((_, n) => next.includes(n)));
   }
+  function resetMixer() {
+    if (!score) return;
+    setMix({});
+    setVisibleTracks(score.tracks.map((_, i) => i));
+    api.current?.changeTrackMute(score.tracks, false);
+    api.current?.changeTrackSolo(score.tracks, false);
+    api.current?.changeTrackVolume(score.tracks, 1);
+    api.current?.renderTracks(score.tracks);
+  }
+
   function changeMix(
     index: number,
     key: "mute" | "solo" | "volume",
@@ -143,6 +295,11 @@ export default function Player({
         </div>
         <span className="format">{tab.format.toUpperCase()}</span>
       </div>
+      {tab.warnings?.map((w, i) => (
+        <p key={i} className="notice">
+          {w}
+        </p>
+      ))}
       {error && (
         <p role="alert" className="notice error">
           {error}
@@ -157,9 +314,11 @@ export default function Player({
             onChange={(e) => {
               const i = +e.target.value;
               setTrack(i);
+              setVisibleTracks([i]);
               if (score) api.current?.renderTracks([score.tracks[i]]);
             }}
           >
+            <button onClick={resetMixer}>Reset tracks</button>
             {tab.tracks.map((t, i) => (
               <option key={i} value={i}>
                 {t.name || `Track ${i + 1}`}
@@ -175,12 +334,78 @@ export default function Player({
           <span>{score?.masterBars.length ?? "—"} measures</span>
         </div>
       </div>
+      <div className="notation-controls">
+        <label>
+          Layout
+          <select
+            value={preferences.notationLayout}
+            onChange={(e) =>
+              setPreference(
+                "notationLayout",
+                e.target.value as "page" | "horizontal",
+              )
+            }
+          >
+            <option value="page">Page view</option>
+            <option value="horizontal">Line view</option>
+          </select>
+        </label>
+        <label>
+          Display
+          <select
+            value={preferences.notationDisplay}
+            onChange={(e) =>
+              setPreference(
+                "notationDisplay",
+                e.target.value as "both" | "notation" | "tabs",
+              )
+            }
+          >
+            <option value="both">Both</option>
+            <option value="notation">Notation</option>
+            <option value="tabs">Tablature</option>
+          </select>
+        </label>
+        {onFavourite && (
+          <button
+            aria-label={
+              tab.favourite ? "Remove from favourites" : "Add to favourites"
+            }
+            aria-pressed={tab.favourite}
+            onClick={onFavourite}
+          >
+            ♡ Favourite
+          </button>
+        )}
+        {score?.masterBars.some((b) => b.section) && (
+          <select
+            aria-label="Jump to section"
+            value=""
+            onChange={(e) => {
+              if (api.current && score)
+                api.current.tickPosition =
+                  score.masterBars[+e.target.value].start;
+            }}
+          >
+            <option value="">Jump to section</option>
+            {score.masterBars.map((b, i) =>
+              b.section ? (
+                <option key={i} value={i}>
+                  {b.section.text}
+                </option>
+              ) : null,
+            )}
+          </select>
+        )}
+      </div>
       {rendering && (
         <p role="status" className="notice">
           Preparing your notation…
         </p>
       )}
-      <div className="score-paper">
+      <div
+        className={`score-paper ${preferences.notationLayout === "horizontal" ? "score-line" : ""}`}
+      >
         <div ref={host} />
       </div>
       <div className="transport">
@@ -202,6 +427,9 @@ export default function Player({
           </button>
           <span className="time">
             {clock(position.currentTime)} / {clock(position.endTime)}
+            <small className="measure-position">
+              Measure {currentMeasure} / {score?.masterBars.length || 1}
+            </small>
           </span>
           <label className="speed">
             Speed
@@ -209,7 +437,7 @@ export default function Player({
               value={speed}
               onChange={(e) => {
                 const s = +e.target.value;
-                setSpeed(s);
+                setPreference("playbackSpeed", s);
                 if (api.current) api.current.playbackSpeed = s;
               }}
             >
@@ -237,9 +465,23 @@ export default function Player({
         />
         <div className="practice-controls">
           <button
+            aria-label="Previous measure"
+            onClick={() => skipMeasure(-1)}
+            disabled={!score}
+          >
+            ← Measure
+          </button>
+          <button
+            aria-label="Next measure"
+            onClick={() => skipMeasure(1)}
+            disabled={!score}
+          >
+            Measure →
+          </button>
+          <button
             aria-pressed={metro}
             onClick={() => {
-              setMetro(!metro);
+              setPreference("metronome", !metro);
               if (api.current) api.current.metronomeVolume = metro ? 0 : 1;
             }}
           >
@@ -248,7 +490,7 @@ export default function Player({
           <button
             aria-pressed={count}
             onClick={() => {
-              setCount(!count);
+              setPreference("countIn", !count);
               if (api.current) api.current.countInVolume = count ? 0 : 1;
             }}
           >
@@ -291,19 +533,54 @@ export default function Player({
             />
           </label>
         </div>
+        <div className="quick-loops">
+          <button
+            onClick={() => {
+              setRange([currentMeasure, currentMeasure]);
+              updateLoop(true, currentMeasure, currentMeasure);
+            }}
+          >
+            Loop current measure
+          </button>
+          <button
+            onClick={() => {
+              const end = score?.masterBars.length || 1;
+              setRange([1, end]);
+              updateLoop(true, 1, end);
+            }}
+          >
+            Loop whole song
+          </button>
+        </div>
         {!ready && !error && (
           <p className="audio-status" role="status">
             Loading bundled audio… notation is available while you wait.
           </p>
         )}
       </div>
-      <details className="mixer">
+      <details
+        className="mixer"
+        open={preferences.showTracksPanel}
+        onToggle={(e) => {
+          if (e.currentTarget.open !== preferences.showTracksPanel)
+            setPreference("showTracksPanel", e.currentTarget.open);
+        }}
+      >
         <summary>
           <Volume2 size={18} /> Track mixer <span>Mute, solo and balance</span>
         </summary>
+        <button onClick={resetMixer}>Reset tracks</button>
         {tab.tracks.map((t, i) => (
           <div className="mixer-row" key={i}>
-            <span>{t.name || `Track ${i + 1}`}</span>
+            <label className="track-visibility">
+              <input
+                type="checkbox"
+                aria-label={`Show ${t.name || `Track ${i + 1}`}`}
+                checked={visibleTracks.includes(i)}
+                onChange={() => toggleVisible(i)}
+              />
+              <span>{t.name || `Track ${i + 1}`}</span>
+            </label>
             <button
               aria-label={`Mute ${t.name}`}
               aria-pressed={mix[i]?.mute ?? false}

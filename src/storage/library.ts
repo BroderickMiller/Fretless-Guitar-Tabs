@@ -18,3 +18,4 @@ export async function deleteTab(id: string) {
 export async function getTab(id: string): Promise<TabEntry | undefined> {
   return (await db()).get("tabs", id);
 }
+export async function clearTabs(){await (await db()).clear('tabs');}
