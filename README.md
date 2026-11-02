@@ -2,7 +2,7 @@
 
 Your music. Your pace. An advertising-free, account-free Guitar Pro library and practice space. Imported music remains on your device; nothing is uploaded.
 
-Target site: https://broderickmiller.github.io/Fretless-Guitar-Tabs/
+Live site: https://broderickmiller.github.io/Fretless-Guitar-Tabs/
 
 ## Develop
 
@@ -46,7 +46,7 @@ The first online visit downloads approximately 5.5 MB of offline assets, includi
 
 ## Deploy
 
-Pushes to `main` run `.github/workflows/deploy.yml`: reproducible installation, TypeScript, ESLint, Vitest, build, desktop/mobile Chromium browser tests, Pages artefact upload and deployment. Pull requests run the same checks without publishing.
+Pushes to `main` run `.github/workflows/deploy.yml`: reproducible installation, TypeScript, ESLint, Vitest, build, desktop/mobile Chromium browser tests, Pages artefact upload and deployment. Pull requests run the same checks without publishing. After deployment, a separate job repeats the browser suite against the public Pages URL, including offline reload and playback.
 
 In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions**. The Vite base is `/Fretless-Guitar-Tabs/`. Fonts, worker/worklet chunks, icons, SoundFont and the service worker resolve under that path. No secrets are needed by the application or deployment workflow.
 

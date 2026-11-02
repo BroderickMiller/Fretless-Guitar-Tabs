@@ -2,13 +2,13 @@
 
 ## Initial audit — 2 November 2026
 
-The source repository had one `main` branch, one initial commit (`c34ed31`), and a two-line README. No application, dependencies, tests, prototypes, architecture documents or workflows existed. A clean React/Vite foundation was required. GitHub reported Pages present; publication configuration requires verification after the first workflow.
+The source repository had one `main` branch, one initial commit (`c34ed31`), and a two-line README. No application, dependencies, tests, prototypes, architecture documents or workflows existed. A clean React/Vite foundation was required. GitHub Pages was configured for GitHub Actions; deployment has now been verified.
 
 ## Implemented foundation and practice controls
 
 Local searchable library; validated multi-file import; IndexedDB; favourites/recent views; original-file download; responsive notation; real-score playback; speed/seek; track selection/mixer; measure loops; metronome/count-in; practice layout; PWA shell/audio caching; dark/light themes; GitHub Actions quality and deployment workflow.
 
-TypeScript, ESLint, six Vitest tests and production build pass locally. The in-app browser has rendered the original GP7 exercise and shown advancing playback. Local standalone Playwright launch is blocked by macOS MachPortRendezvous permission restrictions; CI runs those tests on Ubuntu before deployment.
+TypeScript, ESLint, six Vitest tests and production build pass locally and in CI. All four desktop/mobile Chromium browser tests passed before deployment and again against the public GitHub Pages site: import, favourites and reload persistence, notation, playback progression, speed, looping, metronome, practice mode, corrupt-file rejection and offline reload/playback. The in-app browser also rendered the original GP7 exercise and showed advancing playback. Standalone local Playwright launch remains restricted by macOS; the complete browser suite ran successfully on Ubuntu in CI.
 
 ## Format verification
 
@@ -24,14 +24,20 @@ Extensions are accepted for validation, not advertised as universally compatible
 
 ## Next
 
-1. Complete deployed desktop/mobile browser and offline verification; resolve any CI or Pages configuration failures.
-2. Expand licensed fixture coverage across historical formats, multiple instruments, repeats and complex arrangements.
+1. Expand licensed fixture coverage across historical formats, multiple instruments, repeats and complex arrangements.
+2. Verify real iOS Safari and Android devices; mobile Chromium emulation does not establish real-device compatibility.
 3. Add full-library backup/restore and improve storage durability messaging.
 4. Continue authorised discovery research. Add external adapters only after permission and stable interface terms are established.
 5. Consider chord diagrams, setlists and fretboard views once core reliability is demonstrated.
 
 ## Publication status
 
-Initial GitHub source upload was denied with HTTP 403, `Resource not accessible by integration`, on `POST /repos/BroderickMiller/Fretless-Guitar-Tabs/git/blobs`. Access was subsequently restored, and source was published in commit `212848f`. CI passed TypeScript, ESLint, six unit/component tests and the production build. Both desktop/mobile browser tests reached import, rendering, playback and practice controls; they then exposed a test lifecycle error waiting for a newly activated service worker to claim its current document. The test now navigates after activation before testing offline access. Deployment and production verification are gated by these checks; see Actions for current status.
+Published application commit: `a4714b208c0c3e24c192f07a678b62f8d8ff9b52`.
+
+Live URL: https://broderickmiller.github.io/Fretless-Guitar-Tabs/
+
+Verified successful [Actions run 41404952922](https://github.com/BroderickMiller/Fretless-Guitar-Tabs/actions/runs/41404952922): build, deploy and verify-production jobs all passed on 2 November 2026. The production browser job reported **4 passed (7.5s)**. The live HTML returned HTTP 200. Pages uses the GitHub Actions source with HTTPS enforced.
+
+The initial connection permission denial was resolved through reauthorisation. The first CI run revealed a browser-test service-worker lifecycle wait error; the corrected test reloads after worker activation, then verifies cached navigation, notation and playback with network access disabled. No application features or checks were removed to obtain a passing deployment.
 
 Production dependency audit: no vulnerabilities reported by `npm audit --omit=dev`. The full dependency tree reports development-tool transitive advisories without an available automatic fix; no forced dependency overrides were applied.
