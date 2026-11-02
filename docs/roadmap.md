@@ -32,6 +32,6 @@ Extensions are accepted for validation, not advertised as universally compatible
 
 ## Publication status
 
-Initial GitHub source upload was denied with HTTP 403, `Resource not accessible by integration`, on `POST /repos/BroderickMiller/Fretless-Guitar-Tabs/git/blobs`. No remote writes or deployment have completed. The target Pages URL returned HTTP 404 during the session. The installed GitHub app needs access to this repository with contents/workflow write permissions; local Git has no configured authentication.
+Initial GitHub source upload was denied with HTTP 403, `Resource not accessible by integration`, on `POST /repos/BroderickMiller/Fretless-Guitar-Tabs/git/blobs`. Access was subsequently restored, and source was published in commit `212848f`. CI passed TypeScript, ESLint, six unit/component tests and the production build. Both desktop/mobile browser tests reached import, rendering, playback and practice controls; they then exposed a test lifecycle error waiting for a newly activated service worker to claim its current document. The test now navigates after activation before testing offline access. Deployment and production verification are gated by these checks; see Actions for current status.
 
 Production dependency audit: no vulnerabilities reported by `npm audit --omit=dev`. The full dependency tree reports development-tool transitive advisories without an available automatic fix; no forced dependency overrides were applied.

@@ -64,31 +64,14 @@ test("imports, renders, plays and retains an arrangement offline", async ({
     .getByRole("button", { name: "Library", exact: true })
     .first()
     .click();
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready;
-    while (!navigator.serviceWorker.controller)
-      await new Promise((r) => setTimeout(r, 100));
-    const names = await caches.keys();
-    await Promise.all(
-      names.map(async (n) => {
-        const c = await caches.open(n);
-        for (const r of await c.keys()) {
-          if (r.url.includes("sf2")) await c.match(r);
-        }
-      }),
-    );
-  });
-  // Wait until Workbox has completed its initial atomic precache install.
-  await expect
-    .poll(() =>
-      page.evaluate(async () => {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        return regs.some(
-          (r) => r.active?.state === "activated" && !r.installing,
-        );
-      }),
-    )
-    .toBe(true);
+  // A newly activated worker controls the next navigation. Waiting for it to
+  // claim the current document would hang with Workbox's default lifecycle.
+  await expect.poll(() => page.evaluate(async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    return registrations.some(r => r.active?.state === "activated" && !r.installing);
+  }), { timeout: 30000 }).toBe(true);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
   await context.setOffline(true);
   await page.reload();
   await expect(
