@@ -338,6 +338,7 @@ export default function Player({
         <label>
           Layout
           <select
+            aria-label="Layout"
             value={preferences.notationLayout}
             onChange={(e) =>
               setPreference(
@@ -353,6 +354,7 @@ export default function Player({
         <label>
           Display
           <select
+            aria-label="Display"
             value={preferences.notationDisplay}
             onChange={(e) =>
               setPreference(

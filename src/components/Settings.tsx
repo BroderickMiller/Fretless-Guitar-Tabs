@@ -30,6 +30,7 @@ export default function Settings({
       <label className="setting-row">
         <span>{label}</span>
         <select
+          aria-label={label}
           value={String(preferences[key])}
           onChange={(e) => setPreference(key, e.target.value as Preferences[K])}
         >
@@ -97,6 +98,7 @@ export default function Settings({
           <label className="setting-row">
             <span>Playback speed</span>
             <select
+              aria-label="Playback speed"
               value={preferences.playbackSpeed}
               onChange={(e) => setPreference("playbackSpeed", +e.target.value)}
             >
