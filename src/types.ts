@@ -3,6 +3,7 @@ export interface TabEntry {
   title: string;
   artist: string;
   filename: string;
+  sourceUrl?: string;
   format: string;
   tracks: { name: string; instrument: string; tuning: string }[];
   favourite: boolean;

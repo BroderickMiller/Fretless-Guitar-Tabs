@@ -15,3 +15,5 @@ The official alphaTab Vite plugin emits workers/worklets and copies fonts and au
 Tests cover real GP7 parsing, original-byte persistence, deduplication, corrupt inputs, search, favourites and component interaction. Playwright tests cover desktop/mobile import, notation, playback progress, controls, reload persistence and offline reopening. iPhone-sized Chromium is viewport coverage, not real iOS Safari validation.
 
 Storage is browser-local and subject to browser eviction. Individual-file export is implemented; full-library backup/restore is future work. Large scores can still take time to render; imports are limited to 30 MB each.
+
+URL imports are implemented in `src/services/url-import.ts`. Only HTTPS URLs without embedded credentials are accepted. Fetch omits cookies and referrers; byte streams enforce the same 30 MB import limit before alphaTab validation. Source attribution excludes URL queries/fragments. Provider webpages are recognised locally and produce official-download guidance without scraping. Browser tests exercise deterministic direct-file fetches and the supplied Songsterr page drop, alongside the existing playback/offline suite.

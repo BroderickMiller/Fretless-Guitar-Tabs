@@ -1042,3 +1042,91 @@ button.play-button:hover:not(:disabled) {
   background: #d6f493;
   color: #17210d;
 }
+.url-toggle {
+  margin-top: -38px;
+  margin-bottom: 26px;
+  display: flex;
+  justify-content: flex-end;
+}
+.url-import {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 30px;
+}
+.url-import form > label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.url-fields {
+  display: flex;
+  gap: 10px;
+}
+.url-fields input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.url-import p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+.source-guide {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  min-height: 44px;
+  font-size: 12px;
+  margin-right: 20px;
+}
+.source-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 44px;
+  color: var(--muted);
+}
+.song-actions:has(.source-icon) {
+  flex-wrap: wrap;
+}
+.source-guide .text-button {
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .url-toggle {
+    margin-top: -24px;
+    margin-bottom: 20px;
+  }
+  .url-fields {
+    flex-wrap: wrap;
+  }
+  .url-fields input {
+    flex-basis: 100%;
+  }
+  .url-fields .primary {
+    flex: 1;
+  }
+  .url-import {
+    padding: 16px;
+  }
+  .song-actions:has(.source-icon) {
+    max-width: 99px;
+    justify-content: flex-end;
+  }
+}

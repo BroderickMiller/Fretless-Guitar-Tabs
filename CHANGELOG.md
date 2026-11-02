@@ -11,3 +11,10 @@
 - Began separate Ultimate Guitar/REA investigation; no unauthorised download adapter added.
 
 - Published to GitHub Pages and verified all six unit/component tests and four desktop/mobile browser scenarios; the browser suite passed both before deployment and on the live site, including offline playback.
+
+## 0.2.0 — 2 November 2026
+
+- Added pasted and dropped HTTPS Guitar Pro URL imports with local persistence, deduplication and source attribution.
+- Added provider-page guidance for Songsterr and Ultimate Guitar, including the official-download import route.
+- Added bounded downloads, cancellation and clear errors for webpages, CORS/network failures, unsupported files and unavailable downloads.
+- Added URL import unit and desktop/mobile browser coverage.

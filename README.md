@@ -53,3 +53,9 @@ In **Settings → Pages → Build and deployment → Source**, select **GitHub A
 ## Project information
 
 See [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), [provider research](docs/research/ultimate-guitar.md) and [changelog](CHANGELOG.md). Application source is MIT licensed; alphaTab, Bravura and Sonivox retain their own licences in `public/licences/`. Ultimate Guitar is not a runtime dependency or enabled provider.
+
+## Import from a URL
+
+Choose **Import from URL** and paste an HTTPS link to a directly downloadable Guitar Pro file, or drop the link into the library. The file is validated and saved in IndexedDB like a local import; the source link is retained without query tokens or fragments. The host must allow cross-origin browser downloads. There is no proxy, account-cookie forwarding or tab-page scraping. Downloads have a 30 MB limit and a 30-second timeout, with a cancel control.
+
+Songsterr and Ultimate Guitar page links show a source-specific guide instead of fetching or copying their scores. Songsterr currently lists Guitar Pro download as a Plus feature: use its official export/download option when authorised, then import the downloaded file. HTML/login pages, unavailable downloads and invalid files produce inline errors. New URL imports require internet access; saved imports remain usable offline.

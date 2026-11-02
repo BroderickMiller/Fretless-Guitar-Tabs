@@ -13,11 +13,18 @@ import {
   Download,
   ShieldCheck,
   WifiOff,
+  Link2,
 } from "lucide-react";
 import type { TabEntry } from "./types";
 import { listTabs, saveTab, deleteTab } from "./storage/library";
 import { importTab, extensions } from "./services/import";
 import { searchTabs } from "./providers/local";
+import {
+  importFromUrl,
+  parseImportUrl,
+  sourceWebsite,
+  droppedUrl,
+} from "./services/url-import";
 import PlayerBoundary from "./components/PlayerBoundary";
 const Player = lazy(() => import("./components/Player"));
 type View = "all" | "favourites" | "recent";
@@ -44,6 +51,74 @@ export default function App() {
       return false;
     }
   });
+  const [urlOpen, setUrlOpen] = useState(false),
+    [urlValue, setUrlValue] = useState(""),
+    [downloading, setDownloading] = useState(false);
+  const urlInput = useRef<HTMLInputElement>(null);
+  const downloadController = useRef<AbortController | null>(null);
+  useEffect(() => () => downloadController.current?.abort(), []);
+  let website: string | null = null;
+  let websiteLink = "";
+  try {
+    const url = parseImportUrl(urlValue);
+    website = sourceWebsite(url);
+    websiteLink = url.href;
+  } catch {
+    /* Show validation on submission. */
+  }
+  async function urlImport(value: string) {
+    if (busy) return;
+    setUrlOpen(true);
+    setUrlValue(value);
+    setErrors([]);
+    setMessage("");
+    try {
+      const parsed = parseImportUrl(value);
+      if (sourceWebsite(parsed)) return;
+    } catch (e) {
+      setErrors([e instanceof Error ? e.message : "Check the link."]);
+      return;
+    }
+    if (!navigator.onLine) {
+      setErrors([
+        "Connect to the internet to import a URL. Your saved tabs are still available offline.",
+      ]);
+      return;
+    }
+    setBusy(true);
+    setDownloading(true);
+    const controller = new AbortController();
+    downloadController.current = controller;
+    const timeout = setTimeout(() => controller.abort("timeout"), 30000);
+    try {
+      const tab = await importFromUrl(value, controller.signal);
+      const current = await listTabs();
+      controller.signal.throwIfAborted();
+      if (current.some((t) => t.id === tab.id))
+        setMessage("This arrangement is already in your library.");
+      else {
+        await saveTab(tab);
+        setTabs([...current, tab]);
+        setMessage(`Imported “${tab.title}” from URL.`);
+        setUrlValue("");
+      }
+    } catch (e) {
+      setErrors([
+        controller.signal.aborted
+          ? controller.signal.reason === "timeout"
+            ? "The download timed out. Try again or download the file from its source."
+            : "URL import cancelled."
+          : e instanceof Error
+            ? e.message
+            : "The URL import could not be saved. Check browser storage.",
+      ]);
+    } finally {
+      clearTimeout(timeout);
+      downloadController.current = null;
+      setBusy(false);
+      setDownloading(false);
+    }
+  }
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     listTabs()
@@ -171,7 +246,12 @@ export default function App() {
       className="app"
       onDragOver={(e) => {
         e.preventDefault();
-        if (!selected) setDrag(true);
+        if (
+          !selected &&
+          (e.dataTransfer.types.includes("Files") ||
+            e.dataTransfer.types.includes("text/uri-list"))
+        )
+          setDrag(true);
       }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrag(false);
@@ -179,7 +259,14 @@ export default function App() {
       onDrop={(e) => {
         e.preventDefault();
         setDrag(false);
-        if (!selected) void filesImport(e.dataTransfer.files);
+        if (!selected) {
+          if (e.dataTransfer.files.length)
+            void filesImport(e.dataTransfer.files);
+          else {
+            const url = droppedUrl(e.dataTransfer);
+            if (url) void urlImport(url);
+          }
+        }
       }}
     >
       <a className="skip-link" href="#main">
@@ -307,6 +394,89 @@ export default function App() {
                   {busy ? "Importing…" : "Import tabs"}
                 </button>
               </section>
+              <div className="url-toggle">
+                <button
+                  className="text-button"
+                  aria-expanded={urlOpen}
+                  onClick={() => {
+                    setUrlOpen(!urlOpen);
+                    if (!urlOpen)
+                      requestAnimationFrame(() => urlInput.current?.focus());
+                  }}
+                >
+                  <Link2 size={17} />
+                  Import from URL
+                </button>
+              </div>
+              {urlOpen && (
+                <section className="url-import" aria-label="Import from URL">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void urlImport(urlValue);
+                    }}
+                  >
+                    <label htmlFor="tab-url">Paste a tab link</label>
+                    <div className="url-fields">
+                      <input
+                        ref={urlInput}
+                        id="tab-url"
+                        type="url"
+                        placeholder="https://example.com/song.gp"
+                        value={urlValue}
+                        disabled={busy}
+                        onChange={(e) => setUrlValue(e.target.value)}
+                        required
+                      />
+                      <button
+                        className="primary"
+                        disabled={busy || !!website}
+                        type="submit"
+                      >
+                        {busy ? "Importing…" : "Import URL"}
+                      </button>
+                      {downloading && (
+                        <button
+                          type="button"
+                          onClick={() => downloadController.current?.abort()}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                    <p>
+                      Direct Guitar Pro file links only. Or drop a link anywhere
+                      in your library.
+                    </p>
+                  </form>
+                  {website && (
+                    <div className="source-guide">
+                      <strong>{website} link detected</strong>
+                      <p>
+                        {website === "Songsterr"
+                          ? "Songsterr offers Guitar Pro downloads through Plus. Open this tab there, use its official download option, then import the downloaded file."
+                          : "Open the original tab and use an authorised Guitar Pro download, then import the file here."}
+                      </p>
+                      <a
+                        className="source-link"
+                        href={websiteLink}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open on {website}
+                        <ArrowUpRight size={15} />
+                      </a>
+                      <button
+                        className="text-button"
+                        disabled={busy}
+                        onClick={() => input.current?.click()}
+                      >
+                        Import downloaded file
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
               <input
                 ref={input}
                 type="file"
@@ -446,6 +616,17 @@ export default function App() {
                         </div>
                         <span className="format">{t.format.toUpperCase()}</span>
                         <div className="song-actions">
+                          {t.sourceUrl && (
+                            <a
+                              className="source-icon"
+                              href={t.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Source for ${t.title}`}
+                            >
+                              <ArrowUpRight size={16} />
+                            </a>
+                          )}
                           <button
                             aria-label={`${t.favourite ? "Unfavourite" : "Favourite"} ${t.title}`}
                             aria-pressed={t.favourite}
@@ -562,7 +743,7 @@ export default function App() {
         <div className="drop-overlay">
           <Plus size={48} />
           <h2>Drop your music here.</h2>
-          <p>Guitar Pro files stay on this device.</p>
+          <p>Drop Guitar Pro files or a direct file link.</p>
         </div>
       )}
     </div>

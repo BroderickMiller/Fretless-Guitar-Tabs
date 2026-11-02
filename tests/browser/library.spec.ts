@@ -66,12 +66,25 @@ test("imports, renders, plays and retains an arrangement offline", async ({
     .click();
   // A newly activated worker controls the next navigation. Waiting for it to
   // claim the current document would hang with Workbox's default lifecycle.
-  await expect.poll(() => page.evaluate(async () => {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    return registrations.some(r => r.active?.state === "activated" && !r.installing);
-  }), { timeout: 30000 }).toBe(true);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const registrations =
+            await navigator.serviceWorker.getRegistrations();
+          return registrations.some(
+            (r) => r.active?.state === "activated" && !r.installing,
+          );
+        }),
+      { timeout: 30000 },
+    )
+    .toBe(true);
   await page.reload();
-  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => navigator.serviceWorker.controller !== null),
+    )
+    .toBe(true);
   await context.setOffline(true);
   await page.reload();
   await expect(
@@ -90,13 +103,11 @@ test("imports, renders, plays and retains an arrangement offline", async ({
 });
 test("handles corrupt imports and narrow layouts", async ({ page }) => {
   await page.goto("./");
-  await page
-    .getByLabel("Import Guitar Pro files")
-    .setInputFiles({
-      name: "broken.gp",
-      mimeType: "application/octet-stream",
-      buffer: Buffer.from("broken"),
-    });
+  await page.getByLabel("Import Guitar Pro files").setInputFiles({
+    name: "broken.gp",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("broken"),
+  });
   await expect(page.getByRole("alert")).toContainText("could not be read");
   expect(
     await page.evaluate(
@@ -107,4 +118,83 @@ test("handles corrupt imports and narrow layouts", async ({ page }) => {
     path: `test-results/library-${test.info().project.name}.png`,
     fullPage: true,
   });
+});
+
+test("imports a URL, preserves its source and prevents duplicates", async ({
+  page,
+}) => {
+  const { readFileSync } = await import("node:fs");
+  await page.route("https://example.com/first-light.gp", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/octet-stream",
+      headers: { "access-control-allow-origin": "*" },
+      body: readFileSync("fixtures/first-light.gp"),
+    }),
+  );
+  await page.goto("./");
+  await page
+    .getByRole("button", { name: "Import from URL", exact: true })
+    .click();
+  await page
+    .getByLabel("Paste a tab link")
+    .fill("https://example.com/first-light.gp");
+  await page.getByRole("button", { name: "Import URL", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Imported “First light” from URL.",
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("link", { name: "Source for First light" }),
+  ).toHaveAttribute("href", "https://example.com/first-light.gp");
+  await page
+    .getByRole("button", { name: "Import from URL", exact: true })
+    .click();
+  await page
+    .getByLabel("Paste a tab link")
+    .fill("https://example.com/first-light.gp");
+  await page.getByRole("button", { name: "Import URL", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "already in your library",
+  );
+  await expect(
+    page.getByRole("button", { name: "First light Fretless", exact: true }),
+  ).toHaveCount(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+test("accepts dropped Songsterr links and explains the official download route", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.locator(".app").dispatchEvent("drop", {
+    dataTransfer: await page.evaluateHandle(() => {
+      const data = new DataTransfer();
+      data.setData(
+        "text/uri-list",
+        "https://www.songsterr.com/a/wsa/guns-n-roses-sweet-child-o-mine-tab-s23",
+      );
+      return data;
+    }),
+  });
+  await expect(
+    page.getByText("Songsterr link detected", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open on Songsterr" }),
+  ).toHaveAttribute(
+    "href",
+    "https://www.songsterr.com/a/wsa/guns-n-roses-sweet-child-o-mine-tab-s23",
+  );
+  await expect(
+    page.getByRole("button", { name: "Import URL", exact: true }),
+  ).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

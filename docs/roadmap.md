@@ -41,3 +41,7 @@ Verified successful [Actions run 41404952922](https://github.com/BroderickMiller
 The initial connection permission denial was resolved through reauthorisation. The first CI run revealed a browser-test service-worker lifecycle wait error; the corrected test reloads after worker activation, then verifies cached navigation, notation and playback with network access disabled. No application features or checks were removed to obtain a passing deployment.
 
 Production dependency audit: no vulnerabilities reported by `npm audit --omit=dev`. The full dependency tree reports development-tool transitive advisories without an available automatic fix; no forced dependency overrides were applied.
+
+## URL imports — 0.2.0
+
+Added pasted/dropped direct-file HTTPS imports, source links, cancellation, download limits, duplicate detection and Songsterr/Ultimate Guitar webpage guidance. Thirteen unit/component tests pass locally, including seven URL-service cases. Browser coverage now includes direct URL imports, persisted source attribution, duplicates and the user-supplied Songsterr link. CI gates deployment and then repeats the complete suite on the live site. Automatic Songsterr score copying is not implemented: Guitar Pro download is a Plus feature; Fretless guides users to the official download and subsequent file import.
